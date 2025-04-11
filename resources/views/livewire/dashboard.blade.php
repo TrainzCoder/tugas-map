@@ -64,6 +64,8 @@ new class extends Component {
         <flux:button wire:click="clearPoints">Clear Point</flux:button>
     </div>
     <div id="map" class="h-full" wire:ignore></div>
+    <input id="searchBox" type="text" placeholder="Search location..." class="absolute top-8 right-[32px] transform bg-[rgba(0,0,0,.5)] backdrop-blur-xs z-[1000] w-[600px] p-2 border rounded">
+    
     <script>
         document.addEventListener('livewire:init', () => {
             let map = L.map('map').setView([-6.200000, 106.816666], 15);
@@ -77,49 +79,31 @@ new class extends Component {
             let currentPoints = [];
 
             const updateMarkers = (points) => {
-                // Hapus marker dan polygon yang ada
                 markers.forEach(marker => map.removeLayer(marker));
                 if (polygon) map.removeLayer(polygon);
 
-                // Reset array
                 markers = [];
                 polygon = null;
                 
-                // Tambahkan marker baru
                 points.forEach(point => {
                     const marker = L.marker(point).addTo(map);
                     markers.push(marker);
                 });
 
-                // Gambar polygon jika sudah 3 titik
                 if (points.length === 3) {
-                    polygon = L.polygon(points, {
-                        color: 'red'
-                    }).addTo(map);
+                    polygon = L.polygon(points, { color: 'red' }).addTo(map);
                 }
             };
 
-            // Inisialisasi awal
             updateMarkers({{ json_encode($points) }});
-
-            // Simpan referensi untuk akses cepat
             currentPoints = {{ json_encode($points) }};
 
-            // Tangani klik peta
             map.on('click', (e) => {
                 if (!Livewire.getByName('addingPoints') || currentPoints.length >= 3) return;
-
-                const {
-                    lat,
-                    lng
-                } = e.latlng;
-                Livewire.dispatch('add-point', {
-                    lat,
-                    lng
-                });
+                const { lat, lng } = e.latlng;
+                Livewire.dispatch('add-point', { lat, lng });
             });
 
-            // Event listeners
             Livewire.on('start-adding-js', () => {
                 console.log('Start adding points');
                 currentPoints = [];
@@ -142,6 +126,21 @@ new class extends Component {
                 console.log('Points cleared');
                 currentPoints = [];
                 updateMarkers(currentPoints);
+            });
+
+            let searchBox = document.getElementById('searchBox');
+            searchBox.addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') {
+                    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${searchBox.value}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.length > 0) {
+                                let latlng = [data[0].lat, data[0].lon];
+                                map.setView(latlng, 15);
+                                Livewire.dispatch('add-point', { lat: latlng[0], lng: latlng[1] });
+                            }
+                        });
+                }
             });
         });
     </script>
